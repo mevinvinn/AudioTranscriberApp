@@ -12,7 +12,7 @@ export function MeetingSummary({ summary, speakerNames }: MeetingSummaryProps) {
   // Replace any leftover original speaker labels with their renamed versions
   const resolvedSummary = speakerNames
     ? Object.entries(speakerNames).reduce(
-        (text, [label, name]) => text.replaceAll(label, name),
+        (text, [label, name]) => text.split(label).join(name),
         summary
       )
     : summary;
