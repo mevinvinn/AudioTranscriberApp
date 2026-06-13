@@ -32,6 +32,7 @@ model Meeting {
   errorMessage    String?
   speakerNames    String?            @default("{}")
   summary         String?
+  actionItems     String?            @default("[]")
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
   user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)

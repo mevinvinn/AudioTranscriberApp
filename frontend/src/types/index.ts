@@ -20,6 +20,13 @@ export interface TranscriptSegment {
 
 export type MeetingStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
+export interface ActionItem {
+  text: string;
+  speaker: string;
+  timestamp: number;
+  status: 'todo' | 'done';
+}
+
 export interface Meeting {
   id: string;
   userId: string;
@@ -32,6 +39,7 @@ export interface Meeting {
   errorMessage?: string;
   speakerNames?: string;
   summary?: string;
+  actionItems?: string;
   createdAt: string;
   updatedAt: string;
   tags: Tag[];

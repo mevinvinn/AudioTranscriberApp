@@ -8,7 +8,6 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Spinner } from '../components/ui/Spinner';
 import type { MeetingListItem, FilterState } from '../types';
 import api, { getApiError } from '../services/api';
-import { useAuth } from '../context/AuthContext';
 
 const defaultFilters: FilterState = {
   search: '',
@@ -24,7 +23,6 @@ export function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { user } = useAuth();
 
   const fetchMeetings = useCallback(async () => {
     setIsLoading(true);
@@ -111,7 +109,7 @@ export function DashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Good {getGreeting()}, {user?.name?.split(' ')[0]}!
+              Good {getGreeting()}!
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
               Your meeting transcriptions

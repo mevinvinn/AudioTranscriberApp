@@ -1,19 +1,11 @@
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Mic2, LayoutDashboard, Plus, LogOut, Sun, Moon, User } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { Link, useLocation } from 'react-router-dom';
+import { Mic2, LayoutDashboard, Plus, Sun, Moon } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { clsx } from 'clsx';
 
 export function Navbar() {
-  const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const navigate = useNavigate();
   const location = useLocation();
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
 
   const navLinks = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -61,23 +53,6 @@ export function Navbar() {
               aria-label="Toggle theme"
             >
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            </button>
-
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800">
-              <div className="h-7 w-7 rounded-full bg-primary-600 flex items-center justify-center">
-                <User className="h-4 w-4 text-white" />
-              </div>
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 hidden md:block max-w-[120px] truncate">
-                {user?.name}
-              </span>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-lg text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-              aria-label="Logout"
-            >
-              <LogOut className="h-5 w-5" />
             </button>
           </div>
         </div>

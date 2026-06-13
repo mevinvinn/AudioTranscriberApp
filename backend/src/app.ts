@@ -2,8 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import path from 'path';
-import { authRoutes } from './routes/auth.routes';
 import { meetingsRoutes } from './routes/meetings.routes';
 import { errorHandler, notFound } from './middleware/error.middleware';
 
@@ -20,11 +18,7 @@ app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve uploaded audio files
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
-
 // Routes
-app.use('/api/auth', authRoutes);
 app.use('/api/meetings', meetingsRoutes);
 
 // Health check

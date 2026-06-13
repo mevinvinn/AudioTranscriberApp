@@ -10,10 +10,11 @@ import { TranscriptViewer } from '../components/transcript/TranscriptViewer';
 import { TagManager } from '../components/transcript/TagManager';
 import { SpeakerRenamer } from '../components/transcript/SpeakerRenamer';
 import { MeetingSummary } from '../components/transcript/MeetingSummary';
+import { ActionItems } from '../components/transcript/ActionItems';
 import { Spinner } from '../components/ui/Spinner';
 import type { Meeting } from '../types';
 import { formatDuration, formatDate } from '../utils/formatters';
-import api, { getApiError, resolveMediaUrl } from '../services/api';
+import api, { getApiError } from '../services/api';
 
 export function TranscriptDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -98,10 +99,7 @@ export function TranscriptDetailPage() {
     setExportMenuOpen(false);
     setIsExporting(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/meetings/${meeting.id}/export?format=${format}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await fetch(`/api/meetings/${meeting.id}/export?format=${format}`);
       if (!response.ok) throw new Error('Export failed');
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -141,7 +139,7 @@ export function TranscriptDetailPage() {
     );
   }
 
-  const audioUrl = resolveMediaUrl(meeting.audioFileUrl || '');
+  const audioUrl = meeting.audioFileUrl ? meeting.audioFileUrl : '';
   const segments = meeting.transcriptSegs || [];
 
   return (
@@ -359,6 +357,15 @@ export function TranscriptDetailPage() {
                     </p>
                   </div>
                 </div>
+
+                {/* Action Items */}
+                {meeting.actionItems && (
+                  <ActionItems
+                    actionItems={meeting.actionItems}
+                    speakerNames={speakerNames}
+                    onSeek={(t) => setSeekTo(t)}
+                  />
+                )}
               </div>
 
               {/* Right: Transcript */}

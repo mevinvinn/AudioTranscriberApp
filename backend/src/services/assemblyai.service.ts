@@ -1,5 +1,4 @@
 import { AssemblyAI } from 'assemblyai';
-import fs from 'fs';
 import { removeFillerWords } from '../utils/fillerWords';
 
 interface TranscriptSegment {
@@ -9,12 +8,20 @@ interface TranscriptSegment {
   confidence?: number;
 }
 
+export interface ActionItem {
+  text: string;
+  speaker: string;
+  timestamp: number;
+  status: 'todo' | 'done';
+}
+
 interface TranscriptResult {
   segments: TranscriptSegment[];
   speakerCount: number;
   duration: number;
   jobId: string;
   summary?: string;
+  actionItems?: ActionItem[];
 }
 
 function getClient(): AssemblyAI {
@@ -25,18 +32,17 @@ function getClient(): AssemblyAI {
   return new AssemblyAI({ apiKey });
 }
 
-export async function transcribeAudio(audioFilePath: string): Promise<TranscriptResult> {
+export async function transcribeAudio(audioBuffer: Buffer): Promise<TranscriptResult> {
   if (process.env.USE_MOCK_TRANSCRIPTION === 'true' || !process.env.ASSEMBLYAI_API_KEY) {
-    return await generateMockTranscript(audioFilePath);
+    return await generateMockTranscript();
   }
 
   const client = getClient();
 
-  console.log(`[AssemblyAI] Uploading file: ${audioFilePath}`);
+  console.log(`[AssemblyAI] Uploading file (${audioBuffer.length} bytes)`);
 
-  // Upload the file first using a ReadStream, then transcribe using the returned URL
-  const fileStream = fs.createReadStream(audioFilePath);
-  const uploadUrl = await client.files.upload(fileStream);
+  // Upload the file buffer first, then transcribe using the returned URL
+  const uploadUrl = await client.files.upload(audioBuffer);
   console.log(`[AssemblyAI] File uploaded, URL: ${uploadUrl}`);
 
   const transcript = await client.transcripts.transcribe({
@@ -62,6 +68,7 @@ export async function transcribeAudio(audioFilePath: string): Promise<Transcript
   const speakers = new Set(utterances.map((u) => u.speaker));
   const durationMs = transcript.audio_duration ? transcript.audio_duration * 1000 : 0;
   const summary = await buildSummary(segments);
+  const actionItems = buildActionItems(segments);
 
   return {
     segments,
@@ -69,6 +76,7 @@ export async function transcribeAudio(audioFilePath: string): Promise<Transcript
     duration: Math.floor(durationMs / 1000),
     jobId: transcript.id,
     summary,
+    actionItems,
   };
 }
 
@@ -94,7 +102,7 @@ export async function submitTranscriptionJob(audioFilePath: string): Promise<str
 
 export async function pollTranscriptionJob(jobId: string): Promise<TranscriptResult | null> {
   if (jobId.startsWith('mock-')) {
-    return await generateMockTranscript('');
+    return await generateMockTranscript();
   }
 
   const client = getClient();
@@ -326,7 +334,55 @@ async function buildSummary(segments: TranscriptSegment[]): Promise<string> {
   return paragraphs.join('\n\n');
 }
 
-async function generateMockTranscript(filePath: string): Promise<TranscriptResult> {
+// ─── Action Item Extraction ────────────────────────────────────────────────
+// Heuristic pass over each sentence looking for language that signals a
+// commitment ("I'll send the deck"), an outstanding task ("we need to
+// finalize the budget"), or something already completed ("I've deployed it").
+
+const DONE_PATTERNS = [
+  /\b(already|just)\s+\w*\s*(finished|completed|sent|deployed|done|wrapped up|fixed|resolved|submitted|reviewed|updated|shipped|handled)\b/i,
+  /\b(i've|we've|i have|we have)\s+(finished|completed|sent|deployed|wrapped up|fixed|resolved|submitted|reviewed|updated|shipped|handled|done)\b/i,
+];
+
+// Restricted to first-person commitments ("I'll", "we need to") and explicit
+// task language, so casual third-person predictions ("the fires are going to
+// burn longer") aren't mistaken for action items.
+const TODO_PATTERNS = [
+  /\b(i'll|i will|we'll|we will|let's|let us)\b/i,
+  /\b(i'm|we're|i am|we are)\s+going to\b/i,
+  /\b(i|we)\s+(need to|needs to|have to|has to|plan to|planning to|should|must)\b/i,
+  /\b(action item|to-?do|next steps?|follow[- ]?up)\b/i,
+  /\bnext meeting\b/i,
+  /\bby (tomorrow|next week|end of (day|week|month)|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+];
+
+export function buildActionItems(segments: TranscriptSegment[]): ActionItem[] {
+  const items: ActionItem[] = [];
+  const seen = new Set<string>();
+
+  segments.forEach((seg) => {
+    toRawSentences(seg.transcriptText).forEach((raw) => {
+      const clean = cleanSentence(raw);
+      if (!clean || seen.has(clean)) return;
+
+      const isDone = DONE_PATTERNS.some((re) => re.test(clean));
+      const isTodo = !isDone && TODO_PATTERNS.some((re) => re.test(clean));
+      if (!isDone && !isTodo) return;
+
+      seen.add(clean);
+      items.push({
+        text: clean,
+        speaker: seg.speakerLabel,
+        timestamp: seg.timestamp,
+        status: isDone ? 'done' : 'todo',
+      });
+    });
+  });
+
+  return items.slice(0, 15);
+}
+
+async function generateMockTranscript(): Promise<TranscriptResult> {
   const mockData = [
     { speaker: 'A', start: 0, text: "Good morning everyone, let's get started with today's meeting." },
     { speaker: 'B', start: 5, text: "Thanks for joining. I wanted to go over the project updates." },
@@ -347,13 +403,14 @@ async function generateMockTranscript(filePath: string): Promise<TranscriptResul
     confidence: 0.95,
   }));
 
-  void filePath;
   const summary = await buildSummary(segments);
+  const actionItems = buildActionItems(segments);
   return {
     segments,
     speakerCount: 3,
     duration: 65,
     jobId: `mock-${Date.now()}`,
     summary,
+    actionItems,
   };
 }

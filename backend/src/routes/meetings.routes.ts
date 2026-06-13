@@ -1,16 +1,15 @@
 import { Router, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
-import path from 'path';
-import fs from 'fs';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 import PDFDocument from 'pdfkit';
 import { prisma } from '../lib/prisma';
-import { authenticate, AuthRequest } from '../middleware/auth.middleware';
+import { attachUser, AuthRequest } from '../middleware/auth.middleware';
 import { upload } from '../middleware/upload.middleware';
 import { transcribeAudio } from '../services/assemblyai.service';
+import { uploadAudioFile, deleteAudioFile } from '../services/storage.service';
 
 export const meetingsRoutes = Router();
-meetingsRoutes.use(authenticate);
+meetingsRoutes.use(attachUser);
 
 // GET /api/meetings - list user meetings with search/filter/sort
 meetingsRoutes.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
@@ -76,7 +75,6 @@ meetingsRoutes.post(
   async (req: AuthRequest, res: Response): Promise<void> => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      if (req.file) fs.unlinkSync(req.file.path);
       res.status(400).json({ errors: errors.array() });
       return;
     }
@@ -87,7 +85,6 @@ meetingsRoutes.post(
     }
 
     const { title, tags } = req.body;
-    const audioFileUrl = `/uploads/${req.file.filename}`;
 
     // Parse tags
     let tagList: string[] = [];
@@ -99,6 +96,12 @@ meetingsRoutes.post(
       }
     }
 
+    const { path: storagePath, url: audioFileUrl } = await uploadAudioFile(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
     // Create meeting record
     const meeting = await prisma.meeting.create({
       data: {
@@ -106,7 +109,7 @@ meetingsRoutes.post(
         title,
         audioFileUrl,
         audioFileName: req.file.originalname,
-        audioFilePath: req.file.path,
+        audioFilePath: storagePath,
         status: 'processing',
         tags: {
           create: tagList.map((tagName: string) => ({ tagName })),
@@ -118,7 +121,7 @@ meetingsRoutes.post(
     res.status(202).json({ meeting });
 
     // Run transcription asynchronously
-    processTranscription(meeting.id, req.file.path).catch((err) => {
+    processTranscription(meeting.id, req.file.buffer).catch((err) => {
       console.error(`Transcription failed for meeting ${meeting.id}:`, err.message);
     });
   }
@@ -199,9 +202,9 @@ meetingsRoutes.delete('/:id', async (req: AuthRequest, res: Response): Promise<v
     return;
   }
 
-  // Delete audio file from disk
-  if (meeting.audioFilePath && fs.existsSync(meeting.audioFilePath)) {
-    fs.unlinkSync(meeting.audioFilePath);
+  // Delete audio file from Supabase Storage
+  if (meeting.audioFilePath) {
+    await deleteAudioFile(meeting.audioFilePath);
   }
 
   await prisma.meeting.delete({ where: { id: meeting.id } });
@@ -413,9 +416,9 @@ meetingsRoutes.get('/:id/export', async (req: AuthRequest, res: Response): Promi
   }
 });
 
-async function processTranscription(meetingId: string, audioFilePath: string): Promise<void> {
+async function processTranscription(meetingId: string, audioBuffer: Buffer): Promise<void> {
   try {
-    const result = await transcribeAudio(audioFilePath);
+    const result = await transcribeAudio(audioBuffer);
 
     await (prisma.meeting.update as Function)({
       where: { id: meetingId },
@@ -425,6 +428,7 @@ async function processTranscription(meetingId: string, audioFilePath: string): P
         duration: result.duration,
         assemblyJobId: result.jobId,
         summary: result.summary ?? null,
+        actionItems: JSON.stringify(result.actionItems ?? []),
         transcriptSegs: {
           create: result.segments.map((seg) => ({
             speakerLabel: seg.speakerLabel,

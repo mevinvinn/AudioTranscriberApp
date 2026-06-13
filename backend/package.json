@@ -5,15 +5,15 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    "build": "prisma generate && tsc",
+    "build": "tsc",
     "start": "node dist/server.js",
-    "deploy": "prisma db push && npm run build",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
     "@prisma/client": "^5.7.1",
+    "@supabase/supabase-js": "^2.108.1",
     "assemblyai": "^4.3.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
