@@ -1,7 +1,7 @@
 import { formatDistanceToNow, format } from 'date-fns';
 
 export function formatDuration(seconds?: number): string {
-  if (!seconds || seconds === 0) return '--:--';
+  if (!seconds || seconds === 0 || !Number.isFinite(seconds)) return '--:--';
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;

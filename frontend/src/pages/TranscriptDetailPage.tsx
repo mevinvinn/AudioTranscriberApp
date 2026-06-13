@@ -99,17 +99,18 @@ export function TranscriptDetailPage() {
     setExportMenuOpen(false);
     setIsExporting(true);
     try {
-      const response = await fetch(`/api/meetings/${meeting.id}/export?format=${format}`);
-      if (!response.ok) throw new Error('Export failed');
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
+      const response = await api.get(`/meetings/${meeting.id}/export`, {
+        params: { format },
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(response.data);
       const a = document.createElement('a');
       a.href = url;
       const safeName = meeting.title.replace(/[^a-z0-9]/gi, '_');
       a.download = `${safeName}_transcript.${format}`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch (err) {
+    } catch {
       setError('Export failed. Please try again.');
     } finally {
       setIsExporting(false);
@@ -313,6 +314,7 @@ export function TranscriptDetailPage() {
                     src={audioUrl}
                     onTimeUpdate={setCurrentTime}
                     seekTo={seekTo}
+                    fallbackDuration={meeting.duration}
                   />
                 ) : (
                   <div className="card p-6 text-center text-sm text-gray-400">

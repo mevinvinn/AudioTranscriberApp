@@ -18,11 +18,7 @@ meetingsRoutes.get('/', async (req: AuthRequest, res: Response): Promise<void> =
   const where: Record<string, unknown> = { userId: req.userId };
 
   if (search) {
-    where.OR = [
-      { title: { contains: search } },
-      { tags: { some: { tagName: { contains: search } } } },
-      { transcriptSegs: { some: { transcriptText: { contains: search } } } },
-    ];
+    where.title = { contains: search, mode: 'insensitive' };
   }
 
   if (tags) {

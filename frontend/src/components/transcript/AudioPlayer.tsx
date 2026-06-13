@@ -7,11 +7,12 @@ interface AudioPlayerProps {
   src: string;
   onTimeUpdate?: (time: number) => void;
   seekTo?: number | null;
+  fallbackDuration?: number;
 }
 
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
-export function AudioPlayer({ src, onTimeUpdate, seekTo }: AudioPlayerProps) {
+export function AudioPlayer({ src, onTimeUpdate, seekTo, fallbackDuration }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -31,8 +32,13 @@ export function AudioPlayer({ src, onTimeUpdate, seekTo }: AudioPlayerProps) {
         setCurrentTime(audio.currentTime);
         onTimeUpdate?.(audio.currentTime);
       },
-      durationchange: () => setDuration(audio.duration || 0),
-      loadedmetadata: () => { setDuration(audio.duration || 0); setIsLoaded(true); },
+      durationchange: () => {
+        if (Number.isFinite(audio.duration)) setDuration(audio.duration);
+      },
+      loadedmetadata: () => {
+        if (Number.isFinite(audio.duration)) setDuration(audio.duration);
+        setIsLoaded(true);
+      },
       ended: () => setIsPlaying(false),
       play: () => setIsPlaying(true),
       pause: () => setIsPlaying(false),
@@ -66,17 +72,19 @@ export function AudioPlayer({ src, onTimeUpdate, seekTo }: AudioPlayerProps) {
     }
   };
 
+  const effectiveDuration = duration > 0 ? duration : (fallbackDuration ?? 0);
+
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = progressRef.current?.getBoundingClientRect();
-    if (!rect || !audioRef.current || !duration) return;
+    if (!rect || !audioRef.current || !effectiveDuration) return;
     const x = e.clientX - rect.left;
     const ratio = Math.max(0, Math.min(1, x / rect.width));
-    audioRef.current.currentTime = ratio * duration;
-  }, [duration]);
+    audioRef.current.currentTime = ratio * effectiveDuration;
+  }, [effectiveDuration]);
 
   const seek = (delta: number) => {
     if (!audioRef.current) return;
-    audioRef.current.currentTime = Math.max(0, Math.min(duration, currentTime + delta));
+    audioRef.current.currentTime = Math.max(0, Math.min(effectiveDuration, currentTime + delta));
   };
 
   const toggleMute = () => {
@@ -97,7 +105,7 @@ export function AudioPlayer({ src, onTimeUpdate, seekTo }: AudioPlayerProps) {
     setPlaybackSpeed(speed);
   };
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progress = effectiveDuration > 0 ? (currentTime / effectiveDuration) * 100 : 0;
 
   return (
     <div className="card p-4 space-y-3">
@@ -121,7 +129,7 @@ export function AudioPlayer({ src, onTimeUpdate, seekTo }: AudioPlayerProps) {
         </div>
         <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500">
           <span>{formatTimestamp(Math.floor(currentTime))}</span>
-          <span>{duration > 0 ? formatTimestamp(Math.floor(duration)) : '--:--'}</span>
+          <span>{effectiveDuration > 0 ? formatTimestamp(Math.floor(effectiveDuration)) : '--:--'}</span>
         </div>
       </div>
 
