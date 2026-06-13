@@ -1,11 +1,19 @@
-import { Link, useLocation } from 'react-router-dom';
-import { Mic2, LayoutDashboard, Plus, Sun, Moon } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Mic2, LayoutDashboard, Plus, Sun, Moon, LogOut } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { clsx } from 'clsx';
 
 export function Navbar() {
   const { theme, toggleTheme } = useTheme();
+  const { logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const navLinks = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -53,6 +61,13 @@ export function Navbar() {
               aria-label="Toggle theme"
             >
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </button>
+            <button
+              onClick={handleLogout}
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              aria-label="Log out"
+            >
+              <LogOut className="h-5 w-5" />
             </button>
           </div>
         </div>

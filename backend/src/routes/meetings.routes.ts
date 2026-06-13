@@ -3,13 +3,13 @@ import { body, query, validationResult } from 'express-validator';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 import PDFDocument from 'pdfkit';
 import { prisma } from '../lib/prisma';
-import { attachUser, AuthRequest } from '../middleware/auth.middleware';
+import { authenticate, AuthRequest } from '../middleware/auth.middleware';
 import { upload } from '../middleware/upload.middleware';
 import { transcribeAudio } from '../services/assemblyai.service';
 import { uploadAudioFile, deleteAudioFile } from '../services/storage.service';
 
 export const meetingsRoutes = Router();
-meetingsRoutes.use(attachUser);
+meetingsRoutes.use(authenticate);
 
 // GET /api/meetings - list user meetings with search/filter/sort
 meetingsRoutes.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
