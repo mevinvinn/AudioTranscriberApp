@@ -8,6 +8,10 @@ interface TranscriptSegment {
   confidence?: number;
 }
 
+interface UtteranceSegment extends TranscriptSegment {
+  endTimestamp: number;
+}
+
 export interface ActionItem {
   text: string;
   speaker: string;
@@ -58,17 +62,21 @@ export async function transcribeAudio(audioBuffer: Buffer): Promise<TranscriptRe
   }
 
   const utterances = transcript.utterances || [];
-  const segments: TranscriptSegment[] = utterances.map((u) => ({
+  const utteranceSegments: UtteranceSegment[] = utterances.map((u) => ({
     speakerLabel: `Speaker ${u.speaker}`,
     timestamp: Math.floor((u.start || 0) / 1000),
+    endTimestamp: Math.floor((u.end || u.start || 0) / 1000),
     transcriptText: removeFillerWords(u.text || ''),
     confidence: u.confidence,
   }));
+  const segments: TranscriptSegment[] = utteranceSegments.map(
+    ({ endTimestamp, ...seg }) => seg
+  );
 
   const speakers = new Set(utterances.map((u) => u.speaker));
   const durationMs = transcript.audio_duration ? transcript.audio_duration * 1000 : 0;
   const summary = await buildSummary(segments);
-  const actionItems = buildActionItems(segments);
+  const actionItems = buildActionItems(utteranceSegments);
 
   return {
     segments,
@@ -356,12 +364,45 @@ const TODO_PATTERNS = [
   /\bby (tomorrow|next week|end of (day|week|month)|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
 ];
 
-export function buildActionItems(segments: TranscriptSegment[]): ActionItem[] {
+// Splits an utterance's text into raw sentences along with the character
+// offset each one starts at, so we can estimate where within the utterance's
+// time span a given sentence is actually spoken.
+function splitSentencesWithOffsets(text: string): { raw: string; offset: number }[] {
+  const result: { raw: string; offset: number }[] = [];
+  const regex = /([.!?])(\s+|$)/g;
+  let start = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    const end = match.index + match[1].length;
+    const raw = text.slice(start, end);
+    const trimmed = raw.trim();
+    if (trimmed) {
+      result.push({ raw: trimmed, offset: start + (raw.length - raw.replace(/^\s+/, '').length) });
+    }
+    start = match.index + match[0].length;
+  }
+
+  if (start < text.length) {
+    const raw = text.slice(start);
+    const trimmed = raw.trim();
+    if (trimmed) {
+      result.push({ raw: trimmed, offset: start + (raw.length - raw.replace(/^\s+/, '').length) });
+    }
+  }
+
+  return result;
+}
+
+export function buildActionItems(segments: UtteranceSegment[]): ActionItem[] {
   const items: ActionItem[] = [];
   const seen = new Set<string>();
 
   segments.forEach((seg) => {
-    toRawSentences(seg.transcriptText).forEach((raw) => {
+    const textLength = seg.transcriptText.length;
+    const duration = Math.max((seg.endTimestamp ?? seg.timestamp) - seg.timestamp, 0);
+
+    splitSentencesWithOffsets(seg.transcriptText).forEach(({ raw, offset }) => {
       const clean = cleanSentence(raw);
       if (!clean || seen.has(clean)) return;
 
@@ -370,10 +411,13 @@ export function buildActionItems(segments: TranscriptSegment[]): ActionItem[] {
       if (!isDone && !isTodo) return;
 
       seen.add(clean);
+      const ratio = textLength > 0 ? offset / textLength : 0;
+      const timestamp = seg.timestamp + Math.round(ratio * duration);
+
       items.push({
         text: clean,
         speaker: seg.speakerLabel,
-        timestamp: seg.timestamp,
+        timestamp,
         status: isDone ? 'done' : 'todo',
       });
     });
@@ -403,8 +447,16 @@ async function generateMockTranscript(): Promise<TranscriptResult> {
     confidence: 0.95,
   }));
 
+  const utteranceSegments: UtteranceSegment[] = mockData.map((item, i) => ({
+    speakerLabel: `Speaker ${item.speaker}`,
+    timestamp: item.start,
+    endTimestamp: mockData[i + 1]?.start ?? item.start + 5,
+    transcriptText: item.text,
+    confidence: 0.95,
+  }));
+
   const summary = await buildSummary(segments);
-  const actionItems = buildActionItems(segments);
+  const actionItems = buildActionItems(utteranceSegments);
   return {
     segments,
     speakerCount: 3,
