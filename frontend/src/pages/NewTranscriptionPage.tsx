@@ -59,7 +59,7 @@ export function NewTranscriptionPage() {
 
       const { data } = await api.post('/meetings', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 120000,
+        timeout: 600000, // 10 minutes - allows larger files on slower connections
       });
 
       setSuccess(true);

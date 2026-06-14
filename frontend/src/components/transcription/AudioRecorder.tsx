@@ -78,7 +78,8 @@ export function AudioRecorder({ onRecordingComplete }: AudioRecorderProps) {
         ? 'audio/webm;codecs=opus'
         : 'audio/webm';
 
-      const recorder = new MediaRecorder(stream, { mimeType });
+      // 48kbps keeps a full 2-hour recording around ~43MB, well within the upload limit
+      const recorder = new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 48000 });
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (e) => {

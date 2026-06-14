@@ -5,7 +5,7 @@ import { formatFileSize } from '../../utils/formatters';
 
 const ALLOWED_TYPES = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/wave', 'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/aac'];
 const ALLOWED_EXTS = ['.mp3', '.wav', '.m4a', '.aac'];
-const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_SIZE = 50 * 1024 * 1024; // 50MB
 
 interface AudioUploaderProps {
   file: File | null;
@@ -20,7 +20,7 @@ export function AudioUploader({ file, onFileSelect }: AudioUploaderProps) {
     const ext = '.' + f.name.split('.').pop()?.toLowerCase();
     const typeOk = ALLOWED_TYPES.includes(f.type) || ALLOWED_EXTS.includes(ext);
     if (!typeOk) return `Unsupported format. Allowed: ${ALLOWED_EXTS.join(', ')}`;
-    if (f.size > MAX_SIZE) return `File too large. Maximum size is 10MB (your file: ${formatFileSize(f.size)})`;
+    if (f.size > MAX_SIZE) return `File too large. Maximum size is 50MB (your file: ${formatFileSize(f.size)})`;
     return null;
   };
 
@@ -91,7 +91,7 @@ export function AudioUploader({ file, onFileSelect }: AudioUploaderProps) {
               <span className="text-primary-600 dark:text-primary-400">browse</span>
             </p>
             <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-              MP3, WAV, M4A, AAC · Max 10MB
+              MP3, WAV, M4A, AAC · Max 50MB
             </p>
           </div>
           <input type="file" accept=".mp3,.wav,.m4a,.aac,audio/*" onChange={handleInput} className="hidden" />
