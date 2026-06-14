@@ -1,6 +1,9 @@
 import { Router, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
+import {
+  Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
+  Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType, VerticalAlign,
+} from 'docx';
 import PDFDocument from 'pdfkit';
 import { prisma } from '../lib/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth.middleware';
@@ -273,11 +276,11 @@ meetingsRoutes.get('/tags/all', async (req: AuthRequest, res: Response): Promise
   res.json({ tags: tags.map((t) => t.tagName) });
 });
 
-// GET /api/meetings/:id/export?format=txt|docx|pdf
+// GET /api/meetings/:id/export?format=txt|docx|pdf|mom
 meetingsRoutes.get('/:id/export', async (req: AuthRequest, res: Response): Promise<void> => {
   const format = (req.query.format as string || 'txt').toLowerCase();
-  if (!['txt', 'docx', 'pdf'].includes(format)) {
-    res.status(400).json({ error: 'Invalid format. Use txt, docx, or pdf.' });
+  if (!['txt', 'docx', 'pdf', 'mom'].includes(format)) {
+    res.status(400).json({ error: 'Invalid format. Use txt, docx, pdf, or mom.' });
     return;
   }
 
@@ -303,6 +306,14 @@ meetingsRoutes.get('/:id/export', async (req: AuthRequest, res: Response): Promi
   const dateStr = new Date(meeting.createdAt).toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric',
   });
+
+  if (format === 'mom') {
+    const buffer = await buildMomDocx(meeting, speakerNames, req.userId!);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}_MOM.docx"`);
+    res.send(buffer);
+    return;
+  }
 
   if (format === 'txt') {
     const lines: string[] = [
@@ -447,4 +458,162 @@ async function processTranscription(meetingId: string, audioBuffer: Buffer): Pro
       },
     });
   }
+}
+
+const MOM_NAVY = '1F3864';
+const MOM_HEADER_FILL = 'D9E2F3';
+const MOM_BORDER_COLOR = 'BFBFBF';
+
+function momSectionHeading(num: number, title: string): Paragraph {
+  return new Paragraph({
+    spacing: { before: 320, after: 120 },
+    children: [new TextRun({ text: `${num}. ${title}`, bold: true, size: 26, color: MOM_NAVY })],
+  });
+}
+
+function momCell(text: string, width: number, header: boolean): TableCell {
+  return new TableCell({
+    width: { size: width, type: WidthType.PERCENTAGE },
+    shading: header ? { fill: MOM_HEADER_FILL, type: ShadingType.CLEAR, color: 'auto' } : undefined,
+    verticalAlign: VerticalAlign.CENTER,
+    margins: { top: 60, bottom: 60, left: 100, right: 100 },
+    children: [new Paragraph({
+      alignment: header ? AlignmentType.CENTER : AlignmentType.LEFT,
+      children: [new TextRun({ text, bold: header })],
+    })],
+  });
+}
+
+function momTable(headers: { text: string; width: number }[], rows: string[][]): Table {
+  const headerRow = new TableRow({
+    tableHeader: true,
+    children: headers.map((h) => momCell(h.text, h.width, true)),
+  });
+  const dataRows = rows.map((cells) => new TableRow({
+    children: cells.map((c, i) => momCell(c, headers[i].width, false)),
+  }));
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: { style: BorderStyle.SINGLE, size: 4, color: MOM_BORDER_COLOR },
+      bottom: { style: BorderStyle.SINGLE, size: 4, color: MOM_BORDER_COLOR },
+      left: { style: BorderStyle.SINGLE, size: 4, color: MOM_BORDER_COLOR },
+      right: { style: BorderStyle.SINGLE, size: 4, color: MOM_BORDER_COLOR },
+      insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: MOM_BORDER_COLOR },
+      insideVertical: { style: BorderStyle.SINGLE, size: 4, color: MOM_BORDER_COLOR },
+    },
+    rows: [headerRow, ...dataRows],
+  });
+}
+
+function formatMomDuration(seconds?: number): string {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return '--';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const parts: string[] = [];
+  if (h > 0) parts.push(`${h} hr`);
+  if (m > 0) parts.push(`${m} min`);
+  if (h === 0 && m === 0) parts.push(`${s} sec`);
+  return parts.join(' ');
+}
+
+function splitIntoPoints(text: string, max: number): string[] {
+  const paragraphs = text.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+  const points = paragraphs.length > 1
+    ? paragraphs
+    : text.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+  return points.slice(0, max);
+}
+
+function buildNumberedRows(items: string[][], minRows: number, cols: number): string[][] {
+  const padded = [...items];
+  while (padded.length < minRows) padded.push(new Array(cols).fill(''));
+  return padded.map((row, i) => [String(i + 1), ...row]);
+}
+
+async function buildMomDocx(
+  meeting: any,
+  speakerNames: Record<string, string>,
+  userId: string
+): Promise<Buffer> {
+  const resolveSpeaker = (label: string) => speakerNames[label] || label;
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+
+  const createdAt = new Date(meeting.createdAt);
+  const dateStr = createdAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const timeStr = createdAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const dayStr = createdAt.toLocaleDateString('en-US', { weekday: 'long' });
+
+  const attendeeSet = new Set<string>();
+  for (const seg of meeting.transcriptSegs || []) {
+    attendeeSet.add(resolveSpeaker(seg.speakerLabel));
+  }
+
+  const discussionPoints = meeting.summary ? splitIntoPoints(meeting.summary, 10) : [];
+
+  let actionItems: { text: string }[] = [];
+  try { actionItems = JSON.parse(meeting.actionItems || '[]'); } catch { /* ignore */ }
+
+  const meetingDetailsRows = [
+    ['1', `Meeting Title: ${meeting.title}`],
+    ['2', `Date: ${dateStr}`],
+    ['3', `Time: ${timeStr}`],
+    ['4', `Day: ${dayStr}`],
+    ['5', `Duration: ${formatMomDuration(meeting.duration)}`],
+    ['6', `Prepared By: ${user?.name || ''}`],
+  ];
+
+  const attendeeRows = buildNumberedRows(
+    Array.from(attendeeSet).map((name) => [name]),
+    Math.max(attendeeSet.size, 1),
+    1
+  );
+
+  const discussionRows = buildNumberedRows(
+    discussionPoints.map((text) => [text]),
+    Math.max(discussionPoints.length, 1),
+    1
+  );
+
+  const decisionRows = buildNumberedRows([], 5, 1);
+
+  const actionRows = buildNumberedRows(
+    actionItems.map((item) => [item.text, '']),
+    Math.max(actionItems.length, 5),
+    2
+  );
+
+  const notesRows = buildNumberedRows([], 2, 1);
+
+  const children: (Paragraph | Table)[] = [
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 240 },
+      border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: MOM_NAVY, space: 6 } },
+      children: [new TextRun({ text: 'MOM – MEETING MINUTES', bold: true, size: 36, color: MOM_NAVY })],
+    }),
+
+    momSectionHeading(1, 'MEETING DETAILS'),
+    momTable([{ text: 'S.No', width: 10 }, { text: 'Details', width: 90 }], meetingDetailsRows),
+
+    momSectionHeading(2, 'ATTENDEES'),
+    momTable([{ text: 'S.No', width: 10 }, { text: 'Name', width: 90 }], attendeeRows),
+
+    momSectionHeading(3, 'DISCUSSIONS'),
+    momTable([{ text: 'S.No', width: 10 }, { text: 'Details', width: 90 }], discussionRows),
+
+    momSectionHeading(4, 'DECISIONS'),
+    momTable([{ text: 'S.No', width: 10 }, { text: 'Details', width: 90 }], decisionRows),
+
+    momSectionHeading(5, 'ACTION ITEMS'),
+    momTable([{ text: 'S.No', width: 10 }, { text: 'Details', width: 65 }, { text: 'Due Date', width: 25 }], actionRows),
+
+    momSectionHeading(6, 'OTHER NOTES / OBSERVATIONS'),
+    momTable([{ text: 'S.No', width: 10 }, { text: 'Details', width: 90 }], notesRows),
+  ];
+
+  const doc = new Document({ sections: [{ children }] });
+  return Packer.toBuffer(doc);
 }

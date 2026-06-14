@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Clock, Users, Calendar, Edit2, Check, X,
-  Download, AlertTriangle, Loader2, FileText, FileType, ChevronDown
+  Download, AlertTriangle, Loader2, FileText, FileType, ChevronDown, ChevronRight
 } from 'lucide-react';
 import { Layout } from '../components/layout/Layout';
 import { AudioPlayer } from '../components/transcript/AudioPlayer';
@@ -30,6 +30,7 @@ export function TranscriptDetailPage() {
   const [editTitle, setEditTitle] = useState('');
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [transcriptSubmenuOpen, setTranscriptSubmenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
@@ -68,6 +69,7 @@ export function TranscriptDetailPage() {
     const handler = (e: MouseEvent) => {
       if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
         setExportMenuOpen(false);
+        setTranscriptSubmenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -94,9 +96,10 @@ export function TranscriptDetailPage() {
     );
   };
 
-  const handleExport = async (format: 'txt' | 'docx' | 'pdf') => {
+  const handleExport = async (format: 'txt' | 'docx' | 'pdf' | 'mom') => {
     if (!meeting) return;
     setExportMenuOpen(false);
+    setTranscriptSubmenuOpen(false);
     setIsExporting(true);
     try {
       const response = await api.get(`/meetings/${meeting.id}/export`, {
@@ -107,7 +110,9 @@ export function TranscriptDetailPage() {
       const a = document.createElement('a');
       a.href = url;
       const safeName = meeting.title.replace(/[^a-z0-9]/gi, '_');
-      a.download = `${safeName}_transcript.${format}`;
+      const ext = format === 'mom' ? 'docx' : format;
+      const suffix = format === 'mom' ? 'MOM' : 'transcript';
+      a.download = `${safeName}_${suffix}.${ext}`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -244,30 +249,53 @@ export function TranscriptDetailPage() {
               </button>
 
               {exportMenuOpen && (
-                <div className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-20 overflow-hidden">
-                  <div className="px-3 py-2 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                    Export Transcript
-                  </div>
+                <div className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-20 overflow-hidden">
                   <button
-                    onClick={() => handleExport('txt')}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    onClick={() => setTranscriptSubmenuOpen((o) => !o)}
+                    className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                   >
-                    <FileText className="h-4 w-4 text-gray-400" />
-                    Export as TXT
+                    <span className="flex items-center gap-3">
+                      <FileText className="h-4 w-4 text-gray-400" />
+                      Transcript & Summary
+                    </span>
+                    {transcriptSubmenuOpen
+                      ? <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+                      : <ChevronRight className="h-3.5 w-3.5 text-gray-400" />
+                    }
                   </button>
+
+                  {transcriptSubmenuOpen && (
+                    <div className="border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30">
+                      <button
+                        onClick={() => handleExport('txt')}
+                        className="w-full flex items-center gap-3 pl-9 pr-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      >
+                        <FileText className="h-4 w-4 text-gray-400" />
+                        Export as TXT
+                      </button>
+                      <button
+                        onClick={() => handleExport('docx')}
+                        className="w-full flex items-center gap-3 pl-9 pr-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      >
+                        <FileType className="h-4 w-4 text-blue-500" />
+                        Export as Word (.docx)
+                      </button>
+                      <button
+                        onClick={() => handleExport('pdf')}
+                        className="w-full flex items-center gap-3 pl-9 pr-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      >
+                        <FileText className="h-4 w-4 text-red-500" />
+                        Export as PDF
+                      </button>
+                    </div>
+                  )}
+
                   <button
-                    onClick={() => handleExport('docx')}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    onClick={() => handleExport('mom')}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-t border-gray-100 dark:border-gray-700"
                   >
-                    <FileType className="h-4 w-4 text-blue-500" />
-                    Export as Word (.docx)
-                  </button>
-                  <button
-                    onClick={() => handleExport('pdf')}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <FileText className="h-4 w-4 text-red-500" />
-                    Export as PDF
+                    <FileType className="h-4 w-4 text-emerald-500" />
+                    MOM (Minutes of Meeting)
                   </button>
                 </div>
               )}
