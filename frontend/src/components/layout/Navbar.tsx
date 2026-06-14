@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Mic2, LayoutDashboard, Plus, Sun, Moon, LogOut } from 'lucide-react';
+import { Mic2, LayoutDashboard, Plus, Gauge, Sun, Moon, LogOut } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { clsx } from 'clsx';
@@ -18,6 +18,7 @@ export function Navbar() {
   const navLinks = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/new', label: 'New Recording', icon: Plus },
+    { to: '/usage', label: 'Usage', icon: Gauge },
   ];
 
   return (

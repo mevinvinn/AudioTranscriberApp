@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { meetingsRoutes } from './routes/meetings.routes';
 import { authRoutes } from './routes/auth.routes';
+import { usageRoutes } from './routes/usage.routes';
 import { errorHandler, notFound } from './middleware/error.middleware';
 
 const app = express();
@@ -22,6 +23,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/meetings', meetingsRoutes);
+app.use('/api/usage', usageRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

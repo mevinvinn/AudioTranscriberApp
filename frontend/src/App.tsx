@@ -7,6 +7,7 @@ import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { NewTranscriptionPage } from './pages/NewTranscriptionPage';
 import { TranscriptDetailPage } from './pages/TranscriptDetailPage';
+import { UsagePage } from './pages/UsagePage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
             <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
             <Route path="/new" element={<ProtectedRoute><NewTranscriptionPage /></ProtectedRoute>} />
             <Route path="/meetings/:id" element={<ProtectedRoute><TranscriptDetailPage /></ProtectedRoute>} />
+            <Route path="/usage" element={<ProtectedRoute><UsagePage /></ProtectedRoute>} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </BrowserRouter>
