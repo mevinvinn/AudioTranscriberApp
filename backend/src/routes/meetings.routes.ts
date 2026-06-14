@@ -8,7 +8,7 @@ import PDFDocument from 'pdfkit';
 import { prisma } from '../lib/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth.middleware';
 import { upload } from '../middleware/upload.middleware';
-import { transcribeAudio } from '../services/assemblyai.service';
+import { transcribeAudio, buildDecisions } from '../services/assemblyai.service';
 import { uploadAudioFile, deleteAudioFile } from '../services/storage.service';
 
 export const meetingsRoutes = Router();
@@ -577,13 +577,18 @@ async function buildMomDocx(
     1
   );
 
-  const decisionRows = buildNumberedRows([], 5, 1);
+  const decisions = buildDecisions(meeting.transcriptSegs || []);
+  const decisionRows = decisions.length > 0
+    ? buildNumberedRows(
+        decisions.map((d) => [d.text, d.status === 'made' ? 'Already Decided' : 'To Be Decided']),
+        decisions.length,
+        2
+      )
+    : buildNumberedRows([['No decisions recorded.', '']], 1, 2);
 
-  const actionRows = buildNumberedRows(
-    actionItems.map((item) => [item.text, '']),
-    Math.max(actionItems.length, 5),
-    2
-  );
+  const actionRows = actionItems.length > 0
+    ? buildNumberedRows(actionItems.map((item) => [item.text, '']), actionItems.length, 2)
+    : buildNumberedRows([['No action items identified.', '']], 1, 2);
 
   const notesRows = buildNumberedRows([], 2, 1);
 
@@ -605,7 +610,7 @@ async function buildMomDocx(
     momTable([{ text: 'S.No', width: 10 }, { text: 'Details', width: 90 }], discussionRows),
 
     momSectionHeading(4, 'DECISIONS'),
-    momTable([{ text: 'S.No', width: 10 }, { text: 'Details', width: 90 }], decisionRows),
+    momTable([{ text: 'S.No', width: 10 }, { text: 'Details', width: 65 }, { text: 'Status', width: 25 }], decisionRows),
 
     momSectionHeading(5, 'ACTION ITEMS'),
     momTable([{ text: 'S.No', width: 10 }, { text: 'Details', width: 65 }, { text: 'Due Date', width: 25 }], actionRows),

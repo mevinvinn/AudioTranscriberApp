@@ -426,6 +426,57 @@ export function buildActionItems(segments: UtteranceSegment[]): ActionItem[] {
   return items.slice(0, 15);
 }
 
+// ─── Decision Extraction ────────────────────────────────────────────────────
+// Heuristic pass that distinguishes decisions already made ("we decided to
+// use Postgres") from decisions still pending ("we still need to decide on
+// the launch date"), so a MOM doesn't confuse the two.
+
+export interface Decision {
+  text: string;
+  status: 'made' | 'pending';
+}
+
+const DECISION_MADE_PATTERNS = [
+  /\b(we'?ve|we have|i'?ve|i have)\s+(decided|agreed|settled on|chosen|finalized|opted for)\b/i,
+  /\bwe\s+(decided|agreed|settled on|chose|opted for|went with)\b/i,
+  /\b(it'?s|it is|that'?s|that is)\s+(decided|settled|final|agreed|confirmed)\b/i,
+  /\bthe decision (is|was) (to|that)\b/i,
+  /\bwe'?re going with\b/i,
+  /\bwe will go with\b/i,
+];
+
+const DECISION_PENDING_PATTERNS = [
+  /\b(we|i)\s+(need to|needs to|have to|has to|should|must)\s+decide\b/i,
+  /\blet'?s decide\b/i,
+  /\b(haven'?t|have not|hasn'?t|has not)\s+decided\b/i,
+  /\bneed to make a decision\b/i,
+  /\bdecision (needs to|has to|will) be made\b/i,
+  /\bstill (need|needs|have|has) to (decide|figure out|determine)\b/i,
+  /\bto be (decided|determined)\b/i,
+  /\b(tbd|tbc|to be confirmed)\b/i,
+];
+
+export function buildDecisions(segments: { transcriptText: string }[]): Decision[] {
+  const decisions: Decision[] = [];
+  const seen = new Set<string>();
+
+  segments.forEach((seg) => {
+    toRawSentences(seg.transcriptText).forEach((raw) => {
+      const clean = cleanSentence(raw);
+      if (!clean || seen.has(clean)) return;
+
+      const isPending = DECISION_PENDING_PATTERNS.some((re) => re.test(clean));
+      const isMade = !isPending && DECISION_MADE_PATTERNS.some((re) => re.test(clean));
+      if (!isPending && !isMade) return;
+
+      seen.add(clean);
+      decisions.push({ text: clean, status: isMade ? 'made' : 'pending' });
+    });
+  });
+
+  return decisions.slice(0, 15);
+}
+
 async function generateMockTranscript(): Promise<TranscriptResult> {
   const mockData = [
     { speaker: 'A', start: 0, text: "Good morning everyone, let's get started with today's meeting." },
