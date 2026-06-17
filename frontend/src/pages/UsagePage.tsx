@@ -16,9 +16,12 @@ interface UsageRecording {
 
 interface UsageData {
   totalCreditUsd: number;
+  totalHours: number;
   ratePerHour: number;
   usedUsd: number;
+  usedHours: number;
   remainingUsd: number;
+  remainingHours: number;
   percentUsed: number;
   totalDurationSec: number;
   recordings: UsageRecording[];
@@ -28,8 +31,7 @@ function formatUsd(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
-function formatHours(seconds: number): string {
-  const hours = seconds / 3600;
+function formatHoursValue(hours: number): string {
   return `${hours.toFixed(1)} hr`;
 }
 
@@ -60,7 +62,7 @@ export function UsagePage() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AssemblyAI Usage</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Estimated transcription credit usage for this app's API key
+            Estimated transcription credit usage for your account
           </p>
         </div>
 
@@ -105,28 +107,31 @@ export function UsagePage() {
               </div>
             </div>
 
-            {/* Stats grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {/* Stats grid — 2×2 on mobile, 2×2 on desktop showing money + hours */}
+            <div className="grid grid-cols-2 gap-4">
               <div className="card p-4 flex flex-col gap-1">
                 <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 text-xs font-medium">
                   <Wallet className="h-3.5 w-3.5" />
-                  Used
+                  Credits Used
                 </div>
                 <p className="text-xl font-bold text-gray-900 dark:text-white">{formatUsd(data.usedUsd)}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500">{formatHoursValue(data.usedHours)} transcribed</p>
               </div>
               <div className="card p-4 flex flex-col gap-1">
                 <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 text-xs font-medium">
                   <PiggyBank className="h-3.5 w-3.5" />
-                  Remaining
+                  Credits Remaining
                 </div>
                 <p className="text-xl font-bold text-gray-900 dark:text-white">{formatUsd(data.remainingUsd)}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500">~{formatHoursValue(data.remainingHours)} of audio left</p>
               </div>
               <div className="card p-4 flex flex-col gap-1">
                 <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 text-xs font-medium">
                   <Clock className="h-3.5 w-3.5" />
-                  Audio Transcribed
+                  Total Audio
                 </div>
-                <p className="text-xl font-bold text-gray-900 dark:text-white">{formatHours(data.totalDurationSec)}</p>
+                <p className="text-xl font-bold text-gray-900 dark:text-white">{formatDuration(data.totalDurationSec)}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500">across {data.recordings.length} recording{data.recordings.length !== 1 ? 's' : ''}</p>
               </div>
               <div className="card p-4 flex flex-col gap-1">
                 <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 text-xs font-medium">
@@ -134,6 +139,7 @@ export function UsagePage() {
                   Rate
                 </div>
                 <p className="text-xl font-bold text-gray-900 dark:text-white">${data.ratePerHour.toFixed(2)}/hr</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500">{formatHoursValue(data.totalHours)} total budget</p>
               </div>
             </div>
 

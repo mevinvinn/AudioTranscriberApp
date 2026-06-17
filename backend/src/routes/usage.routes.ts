@@ -10,11 +10,11 @@ usageRoutes.use(authenticate);
 const RATE_PER_HOUR = parseFloat(process.env.ASSEMBLYAI_RATE_PER_HOUR || '0.17');
 const TOTAL_CREDIT_USD = parseFloat(process.env.ASSEMBLYAI_TOTAL_CREDIT_USD || '50');
 
-// GET /api/usage - AssemblyAI credit usage across all transcriptions
-usageRoutes.get('/', async (_req: AuthRequest, res: Response): Promise<void> => {
+// GET /api/usage - AssemblyAI credit usage for the logged-in user's recordings
+usageRoutes.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
   const meetings = await prisma.meeting.findMany({
-    where: { status: 'completed', duration: { not: null } },
-    select: { id: true, title: true, duration: true, createdAt: true, userId: true },
+    where: { userId: req.userId, status: 'completed', duration: { not: null } },
+    select: { id: true, title: true, duration: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
   });
 
@@ -36,12 +36,18 @@ usageRoutes.get('/', async (_req: AuthRequest, res: Response): Promise<void> => 
     ? Math.min((usedUsd / TOTAL_CREDIT_USD) * 100, 100)
     : 0;
   const totalDurationSec = recordings.reduce((sum, r) => sum + r.duration, 0);
+  const usedHours = totalDurationSec / 3600;
+  const totalHours = TOTAL_CREDIT_USD / RATE_PER_HOUR;
+  const remainingHours = Math.max(totalHours - usedHours, 0);
 
   res.json({
     totalCreditUsd: TOTAL_CREDIT_USD,
+    totalHours,
     ratePerHour: RATE_PER_HOUR,
     usedUsd,
+    usedHours,
     remainingUsd,
+    remainingHours,
     percentUsed,
     totalDurationSec,
     recordings,

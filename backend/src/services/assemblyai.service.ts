@@ -364,6 +364,59 @@ const TODO_PATTERNS = [
   /\bby (tomorrow|next week|end of (day|week|month)|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
 ];
 
+// Conversational sentences that trip the TODO patterns but aren't real tasks.
+const NOISE_PATTERNS = [
+  /\blet'?s\s+(go|move on|start|begin|wrap up|get started|head|dive in|jump in|keep going|keep in mind|take a look at that)\b/i,
+  /\b(i'll|i will)\s+(say|mention|let you know|see|think|try|just be|be honest|be clear)\b/i,
+  /\bwe'?ll\s+(see|figure it out|cross that bridge|deal with it)\b/i,
+  /\b(need to|have to|should)\s+(remember|mention|note|say|be honest|be clear|keep in mind)\b/i,
+  /\bi'?m\s+going to\s+(say|mention|talk|tell|explain|describe)\b/i,
+  /\b(i|we)\s+(should|must|need to)\s+(be|stay|remain|continue|keep)\b/i,
+];
+
+// Concrete deliverable verbs — a TODO sentence must contain at least one to
+// qualify as an action item, filtering out vague filler like "I'll see" or
+// "we need to think about that".
+const ACTIONABLE_VERBS = new Set([
+  // Communication
+  'send', 'email', 'message', 'share', 'forward', 'notify', 'inform', 'announce',
+  // Scheduling
+  'schedule', 'book', 'arrange', 'organize', 'plan', 'setup',
+  // Creation / output
+  'prepare', 'draft', 'write', 'create', 'build', 'develop', 'design',
+  'document', 'record', 'compile', 'report', 'summarize',
+  // Review / approval
+  'review', 'check', 'verify', 'test', 'approve', 'validate', 'audit',
+  // Update / fix
+  'update', 'edit', 'revise', 'modify', 'fix', 'resolve', 'address', 'correct', 'refactor',
+  // Delivery
+  'submit', 'upload', 'deliver', 'present', 'publish', 'deploy', 'release', 'ship', 'launch',
+  // Contact
+  'call', 'contact', 'reach', 'followup',
+  // Finalization
+  'confirm', 'finalize', 'complete', 'finish', 'close', 'sign', 'approve',
+  // Research / analysis
+  'research', 'analyze', 'investigate', 'explore', 'evaluate', 'assess', 'compare',
+  // Technical
+  'install', 'configure', 'integrate', 'migrate', 'implement', 'connect', 'sync',
+  // People
+  'assign', 'delegate', 'hire', 'train', 'onboard', 'interview',
+  // Procurement
+  'purchase', 'buy', 'order', 'request', 'procure',
+  // Data
+  'collect', 'gather', 'pull', 'extract', 'download',
+  // Collaboration
+  'meet', 'discuss', 'coordinate', 'align', 'sync',
+]);
+
+function hasActionableVerb(text: string): boolean {
+  const lower = text.toLowerCase();
+  for (const verb of ACTIONABLE_VERBS) {
+    if (lower.includes(verb)) return true;
+  }
+  return false;
+}
+
 // Splits an utterance's text into raw sentences along with the character
 // offset each one starts at, so we can estimate where within the utterance's
 // time span a given sentence is actually spoken.
@@ -406,9 +459,20 @@ export function buildActionItems(segments: UtteranceSegment[]): ActionItem[] {
       const clean = cleanSentence(raw);
       if (!clean || seen.has(clean)) return;
 
+      // Action items need a minimum length to be meaningful
+      if (clean.length < 25) return;
+      // Skip pure questions — they're discussion, not commitments
+      if (clean.endsWith('?')) return;
+
       const isDone = DONE_PATTERNS.some((re) => re.test(clean));
       const isTodo = !isDone && TODO_PATTERNS.some((re) => re.test(clean));
       if (!isDone && !isTodo) return;
+
+      // For TODO items: filter conversational noise and require a concrete verb
+      if (isTodo) {
+        if (NOISE_PATTERNS.some((re) => re.test(clean))) return;
+        if (!hasActionableVerb(clean)) return;
+      }
 
       seen.add(clean);
       const ratio = textLength > 0 ? offset / textLength : 0;
